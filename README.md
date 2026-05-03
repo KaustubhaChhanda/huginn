@@ -1,0 +1,1 @@
+This is just a python script that listens to voice commands do things.
