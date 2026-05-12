@@ -3,6 +3,7 @@ import speech_recognition as sr
 import time
 import pyautogui
 import os
+import pyttsx3
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -10,6 +11,20 @@ from google.genai import types
 # Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# --- TTS SYSTEM ---
+engine = pyttsx3.init()
+# Optional: Adjust voice properties
+voices = engine.getProperty('voices')
+if voices:
+    engine.setProperty('voice', voices[0].id) # Index 0 is usually male, 1 is female
+engine.setProperty('rate', 180) # Speed of speech
+
+def speak(text):
+    """Prints and speaks the given text."""
+    print(f"Assistant: {text}")
+    engine.say(text)
+    engine.runAndWait()
 
 # --- TOOLS FOR GEMINI ---
 def run_command(command: str):
@@ -84,10 +99,21 @@ if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
     chat = None
 else:
     client = genai.Client(api_key=GEMINI_API_KEY)
+    
+    # System instruction for the assistant
+    system_instruction = (
+        "You are Huginn, an intelligent Windows voice assistant. "
+        "You can control the computer using tools or answer questions. "
+        "Keep your spoken responses concise and helpful. "
+        "When asked to perform a task, do it and confirm briefly."
+    )
+    
     # Start a chat session with automatic function calling enabled by default
+    # Using 'gemini-2.0-flash-lite' as it might be more stable regarding quota/thought signatures
     chat = client.chats.create(
-        model='gemini-flash-latest',
+        model='gemini-2.0-flash-lite',
         config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
             tools=tools,
         )
     )
@@ -96,8 +122,7 @@ else:
 recognizer = sr.Recognizer()
 
 def main():
-    print("Huginn Intelligent Assistant is online.")
-    print("Using Gemini (New SDK) for command processing.")
+    speak("Huginn Intelligent Assistant is online.")
     
     if not chat:
         print("Assistant cannot start without a valid API key.")
@@ -114,15 +139,20 @@ def main():
             print("You said:", user_input)
 
             if "exit" in user_input or "stop program" in user_input:
-                print("Exiting assistant...")
+                speak("Goodbye!")
                 break
 
             # Send input to Gemini
             response = chat.send_message(user_input)
             
-            # Print Gemini's text response if any
+            # Print and speak Gemini's text response if any
             if response.text:
-                print("Gemini:", response.text)
+                speak(response.text)
+            else:
+                # If there's no text but tools were called, Gemini usually follows up with text 
+                # after the tool results are processed. 
+                # In automatic mode, send_message handles the tool loop.
+                pass
 
         except sr.UnknownValueError:
             print("Sorry, I didn’t catch that.")
