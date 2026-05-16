@@ -118,6 +118,25 @@ else:
         )
     )
 
+    # Helper to send a message to Gemini safely and extract text
+    def send_to_gemini(prompt: str) -> str:
+        """Send `prompt` to the Gemini chat client and return the assistant's text.
+
+        This provides a resilient wrapper that handles missing attributes
+        or unexpected response shapes without crashing the main loop.
+        """
+        try:
+            resp = chat.send_message(prompt)
+            # Common SDKs expose text on `.text` or in a dict-like response
+            if hasattr(resp, "text") and resp.text:
+                return resp.text
+            if isinstance(resp, dict):
+                return resp.get("text") or resp.get("content") or str(resp)
+            return str(resp)
+        except Exception as e:
+            # Don't raise here; return a user-friendly message
+            return f"(Gemini error: {e})"
+
 # --- VOICE SYSTEM ---
 recognizer = sr.Recognizer()
 
@@ -142,25 +161,26 @@ def main():
                 speak("Goodbye!")
                 break
 
-            # Send input to Gemini
-            response = chat.send_message(user_input)
-            
-            # Print and speak Gemini's text response if any
-            if response.text:
-                speak(response.text)
+            # Send input to Gemini using the safe wrapper
+            response_text = send_to_gemini(user_input)
+
+            # Speak the assistant response (if any)
+            if response_text:
+                speak(response_text)
             else:
-                # If there's no text but tools were called, Gemini usually follows up with text 
-                # after the tool results are processed. 
-                # In automatic mode, send_message handles the tool loop.
-                pass
+                # No textual response received
+                print("No response text from Gemini.")
 
         except sr.UnknownValueError:
             print("Sorry, I didn’t catch that.")
         except sr.RequestError:
             print("Network issue.")
+        except KeyboardInterrupt:
+            print("Interrupted by user. Exiting.")
+            break
         except Exception as e:
             print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
-
+
